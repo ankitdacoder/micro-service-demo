@@ -3,6 +3,7 @@ package com.microservice.CitizenService.controller;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,6 +29,7 @@ public class CitizenController {
 		return new ResponseEntity<>("Hello", HttpStatus.OK);
 	}
 
+	@LoadBalanced
 	@GetMapping("/id/{id}")
 	public ResponseEntity<List<CitizenEntity>> getCitizensById(@PathVariable Integer id) {
 		List<CitizenEntity> listOfCitzens = citizenRepo.findByvaccinaionCenterId(id);

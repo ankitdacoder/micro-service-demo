@@ -16,9 +16,12 @@ import org.springframework.web.client.RestTemplate;
 
 import com.netflix.hystrix.contrib.javanica.annotation.HystrixCommand;
 import com.webdacoder.VaccinationCenter.Entity.VaccinationCentre;
+import com.webdacoder.VaccinationCenter.feignClient.Citizen_Feign;
 import com.webdacoder.VaccinationCenter.model.CitizenEntity;
 import com.webdacoder.VaccinationCenter.model.ReponseModel;
 import com.webdacoder.VaccinationCenter.repo.VaccinationCenterRepo;
+
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 
 @RestController
 @RequestMapping("/vaccinationcenter")
@@ -29,6 +32,9 @@ public class VaccinationCenterController {
   
   @Autowired
   private RestTemplate restTemplate;
+  
+  @Autowired
+  private Citizen_Feign citizenClient;
 	
 	@PostMapping("/add")
 	public ResponseEntity<VaccinationCentre> addCitizen(@RequestBody VaccinationCentre requst){
@@ -37,28 +43,35 @@ public class VaccinationCenterController {
 	}
 	
 	@GetMapping("/id/{id}")
-	@HystrixCommand(fallbackMethod = "handleCitizenDownTime")
+	//@HystrixCommand(fallbackMethod = "handleCitizenDownTime")
+	@CircuitBreaker(name="circuit-breaker-for-citizen",fallbackMethod = "getCitizenFallback")
 	public ResponseEntity<ReponseModel> getCitizensById(@PathVariable Integer id) {
 		ReponseModel response = new ReponseModel();
 		Optional<VaccinationCentre> vaccinationCentre = repo.findById(id);
-		if(vaccinationCentre.isPresent()) {
+		if (vaccinationCentre.isPresent()) {
 			response.setCentre(vaccinationCentre.get());
-			@SuppressWarnings("unchecked")
-			List<CitizenEntity> citizenList = restTemplate
-			.getForObject("http://CITIZEN-SERVICE/citizen/id/" + id, List.class);
-			response.setCitizens(citizenList);
+			/*
+			 * @SuppressWarnings("unchecked") List<CitizenEntity> citizenList =
+			 * restTemplate.getForObject("http://CITIZEN-SERVICE/citizen/id/" + id,
+			 * List.class);
+			 */
+
+			ResponseEntity<List<CitizenEntity>> citizenList = citizenClient.getCitizenListByVaccinationCenterId(id);
+			if (citizenList.getStatusCode().equals(HttpStatus.OK)) {
+				response.setCitizens(citizenList.getBody());
+			}
 		}
 		return new ResponseEntity<>(response, HttpStatus.OK);
 
 	}
 	
-	public ResponseEntity<ReponseModel> handleCitizenDownTime(@PathVariable Integer id) {
+	public ResponseEntity<ReponseModel> getCitizenFallback(@PathVariable Integer id) {
 		ReponseModel response = new ReponseModel();
 		Optional<VaccinationCentre> vaccinationCentre = repo.findById(id);
 		if(vaccinationCentre.isPresent()) {
 			response.setCentre(vaccinationCentre.get());
 		}
-		return new ResponseEntity<>(response, HttpStatus.OK);
+		return new ResponseEntity<ReponseModel>(HttpStatus.NO_CONTENT);
 	}
 	
 	
